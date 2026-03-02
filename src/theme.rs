@@ -44,6 +44,10 @@ pub struct Theme {
     pub opencode_bubble_bg: Color,
     /// OpenCode source indicator color
     pub opencode_source: Color,
+    /// Copilot message bubble background
+    pub copilot_bubble_bg: Color,
+    /// Copilot source indicator color
+    pub copilot_source: Color,
     /// Scope indicator background (slightly different from search_bg)
     pub scope_bg: Color,
     /// Scope keycap background (for "/" key)
@@ -89,6 +93,8 @@ impl Theme {
             factory_source: Color::Rgb(150, 120, 200), // Google purple
             opencode_bubble_bg: Color::Rgb(30, 40, 55), // subtle blue tint
             opencode_source: Color::Rgb(100, 150, 255), // sky blue
+            copilot_bubble_bg: Color::Rgb(30, 45, 45), // subtle teal tint
+            copilot_source: Color::Rgb(100, 200, 180), // GitHub Copilot teal
             scope_bg: Color::Rgb(45, 45, 50),         // slightly lighter than search_bg
             scope_key_bg: Color::Rgb(60, 60, 65),     // keycap style
             separator_fg: Color::Rgb(60, 60, 65),     // subtle separator
@@ -120,6 +126,8 @@ impl Theme {
             factory_source: Color::Rgb(100, 80, 160),  // Google purple (darker for light bg)
             opencode_bubble_bg: Color::Rgb(225, 235, 250), // subtle blue tint
             opencode_source: Color::Rgb(50, 100, 200), // sky blue (darker for light bg)
+            copilot_bubble_bg: Color::Rgb(220, 240, 235), // subtle teal tint
+            copilot_source: Color::Rgb(40, 140, 120), // GitHub Copilot teal (darker for light bg)
             scope_bg: Color::Rgb(215, 215, 220),      // slightly darker than search_bg
             scope_key_bg: Color::Rgb(200, 200, 205),  // keycap style
             separator_fg: Color::Rgb(195, 195, 200),  // visible on light bg

@@ -8,7 +8,7 @@ mod cli;
 
 #[derive(Parser)]
 #[command(name = "recall")]
-#[command(version, about = "Search and resume Claude Code, Codex CLI, and Factory conversations")]
+#[command(version, about = "Search and resume Claude Code, Codex CLI, Factory, and Copilot conversations")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,

@@ -1,6 +1,6 @@
 # recall&nbsp;&nbsp;&nbsp;[![Mentioned in Awesome Claude Code](https://awesome.re/mentioned-badge.svg)](https://github.com/hesreallyhim/awesome-claude-code)
 
-Search and resume your Claude Code conversations. Also supports Codex, OpenCode and Factory (Droid).
+Search and resume your Claude Code conversations. Also supports Codex, OpenCode, Factory (Droid) and Copilot CLI.
 
 **Tip**: Don't like reading? Tell your agent to use `recall search --help` and it'll search for you.
 
@@ -66,6 +66,7 @@ For example, to resume conversations in YOLO mode, add this to your `.bashrc` or
 ```bash
 export RECALL_CLAUDE_CMD="claude --dangerously-skip-permissions --resume {id}"
 export RECALL_CODEX_CMD="codex --dangerously-bypass-approvals-and-sandbox resume {id}"
+export RECALL_COPILOT_CMD="copilot --resume={id}"
 ```
 
 ---

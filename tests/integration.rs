@@ -35,6 +35,11 @@ fn setup_test_env() -> TempDir {
     let codex_dst = temp_path.join(".codex");
     copy_dir_recursive(&codex_src, &codex_dst);
 
+    // Copy .copilot directory
+    let copilot_src = fixtures.join(".copilot");
+    let copilot_dst = temp_path.join(".copilot");
+    copy_dir_recursive(&copilot_src, &copilot_dst);
+
     temp_dir
 }
 
@@ -142,6 +147,22 @@ fn test_discovers_codex_sessions() {
     assert!(
         files.iter().any(|f| f.to_string_lossy().contains(".codex/sessions")),
         "Should find files in .codex/sessions"
+    );
+}
+
+#[test]
+fn test_discovers_copilot_sessions() {
+    let _lock = lock_test();
+    let temp_dir = setup_test_env();
+    std::env::set_var("RECALL_HOME_OVERRIDE", temp_dir.path());
+
+    let files = recall::parser::discover_session_files();
+
+    std::env::remove_var("RECALL_HOME_OVERRIDE");
+
+    assert!(
+        files.iter().any(|f| f.to_string_lossy().contains(".copilot/session-state")),
+        "Should find files in .copilot/session-state"
     );
 }
 
@@ -544,6 +565,27 @@ fn test_cli_search_with_source_filter() {
     // All results should be Claude
     for result in results {
         assert_eq!(result["source"], "claude");
+    }
+}
+
+#[test]
+fn test_cli_search_with_copilot_source_filter() {
+    let _lock = lock_test();
+    let temp_dir = setup_test_env();
+
+    let (stdout, _stderr, success) = run_cli(
+        &["search", "hello", "--source", "copilot", "--limit", "10"],
+        temp_dir.path(),
+    );
+
+    assert!(success);
+
+    let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let results = json["results"].as_array().unwrap();
+
+    // All results should be Copilot
+    for result in results {
+        assert_eq!(result["source"], "copilot");
     }
 }
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Search and resume past conversations from Claude Code, Codex CLI, and Factory (Droid).
+Search and resume past conversations from Claude Code, Codex CLI, Factory (Droid), OpenCode, and Copilot CLI.
 
 ## Principles
 
@@ -41,7 +41,7 @@ cargo install --path .
 
 ## Architecture
 
-Rust TUI for searching Claude Code, Codex CLI, and Factory conversation history.
+Rust TUI for searching Claude Code, Codex CLI, Factory, OpenCode, and Copilot CLI conversation history.
 
 - `src/main.rs` - Entry point, event loop, exec into CLI on resume
 - `src/app.rs` - Application state, search logic, background indexing thread
@@ -49,7 +49,7 @@ Rust TUI for searching Claude Code, Codex CLI, and Factory conversation history.
 - `src/tui.rs` - Terminal setup/teardown
 - `src/theme.rs` - Light/dark theme with auto-detection
 - `src/session.rs` - Core types: Session, Message, SearchResult
-- `src/parser/` - JSONL parsers for Claude (`~/.claude/projects/`), Codex (`~/.codex/sessions/`), and Factory (`~/.factory/sessions/`)
+- `src/parser/` - JSONL parsers for Claude (`~/.claude/projects/`), Codex (`~/.codex/sessions/`), Factory (`~/.factory/sessions/`), OpenCode (`~/.local/share/opencode/`), and Copilot CLI (`~/.copilot/session-state/`)
 - `src/index/` - Tantivy full-text search index, stored in `~/Library/Caches/recall/` (macOS) or `~/.cache/recall/` (Linux)
 
 ## Key Patterns

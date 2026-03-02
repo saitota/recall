@@ -1,0 +1,7 @@
+{"type":"session.start","data":{"sessionId":"test-copilot-001","version":1,"producer":"copilot-agent","copilotVersion":"0.0.420","startTime":"2026-01-15T10:00:00.000Z","context":{"cwd":"/test/project","gitRoot":"/test/project","branch":"main","repository":"test/project"}},"id":"ev1","timestamp":"2026-01-15T10:00:00.000Z","parentId":null}
+{"type":"user.message","data":{"content":"hello copilot","attachments":[],"interactionId":"int-001"},"id":"ev2","timestamp":"2026-01-15T10:00:05.000Z","parentId":"ev1"}
+{"type":"assistant.turn_start","data":{"turnId":"0","interactionId":"int-001"},"id":"ev3","timestamp":"2026-01-15T10:00:05.100Z","parentId":"ev2"}
+{"type":"session.model_change","data":{"newModel":"gpt-4.1"},"id":"ev4","timestamp":"2026-01-15T10:00:06.000Z","parentId":"ev3"}
+{"type":"session.info","data":{"infoType":"model","message":"Model changed to: gpt-4.1"},"id":"ev5","timestamp":"2026-01-15T10:00:06.000Z","parentId":"ev4"}
+{"type":"assistant.message","data":{"content":"Hello! How can I help you today?","messageId":"msg1","toolRequests":[],"interactionId":"int-001"},"id":"ev6","timestamp":"2026-01-15T10:00:10.000Z","parentId":"ev5"}
+{"type":"assistant.turn_end","data":{},"id":"ev7","timestamp":"2026-01-15T10:00:10.100Z","parentId":"ev6"}

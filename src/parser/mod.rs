@@ -1,10 +1,12 @@
 mod claude;
 mod codex;
+mod copilot;
 mod factory;
 mod opencode;
 
 pub use claude::ClaudeParser;
 pub use codex::CodexParser;
+pub use copilot::CopilotParser;
 pub use factory::FactoryParser;
 pub use opencode::OpenCodeParser;
 
@@ -118,6 +120,19 @@ pub fn discover_session_files() -> Vec<std::path::PathBuf> {
                 }
             }
         }
+
+        // Copilot CLI: ~/.copilot/session-state/*/events.jsonl
+        let copilot_dir = home.join(".copilot/session-state");
+        if copilot_dir.exists() {
+            if let Ok(sessions) = std::fs::read_dir(&copilot_dir) {
+                for session in sessions.flatten() {
+                    let events = session.path().join("events.jsonl");
+                    if events.exists() {
+                        files.push(events);
+                    }
+                }
+            }
+        }
     }
 
     files
@@ -133,6 +148,8 @@ pub fn parse_session_file(path: &Path) -> Result<Session> {
         FactoryParser::parse_file(path)
     } else if OpenCodeParser::can_parse(path) {
         OpenCodeParser::parse_file(path)
+    } else if CopilotParser::can_parse(path) {
+        CopilotParser::parse_file(path)
     } else {
         anyhow::bail!("Unknown session file format: {:?}", path)
     }

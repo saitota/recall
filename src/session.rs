@@ -12,6 +12,8 @@ pub enum SessionSource {
     Factory,
     #[serde(rename = "opencode")]
     OpenCode,
+    #[serde(rename = "copilot")]
+    CopilotCli,
 }
 
 impl SessionSource {
@@ -21,6 +23,7 @@ impl SessionSource {
             SessionSource::CodexCli => "codex",
             SessionSource::Factory => "factory",
             SessionSource::OpenCode => "opencode",
+            SessionSource::CopilotCli => "copilot",
         }
     }
 
@@ -30,6 +33,7 @@ impl SessionSource {
             "codex" => Some(SessionSource::CodexCli),
             "factory" => Some(SessionSource::Factory),
             "opencode" => Some(SessionSource::OpenCode),
+            "copilot" => Some(SessionSource::CopilotCli),
             _ => None,
         }
     }
@@ -40,6 +44,7 @@ impl SessionSource {
             SessionSource::CodexCli => "Codex",
             SessionSource::Factory => "Factory",
             SessionSource::OpenCode => "OpenCode",
+            SessionSource::CopilotCli => "Copilot",
         }
     }
 
@@ -49,6 +54,7 @@ impl SessionSource {
             SessionSource::CodexCli => "■",
             SessionSource::Factory => "◆",
             SessionSource::OpenCode => "○",
+            SessionSource::CopilotCli => "▲",
         }
     }
 }
@@ -105,6 +111,7 @@ impl Session {
             SessionSource::CodexCli => "RECALL_CODEX_CMD",
             SessionSource::Factory => "RECALL_FACTORY_CMD",
             SessionSource::OpenCode => "RECALL_OPENCODE_CMD",
+            SessionSource::CopilotCli => "RECALL_COPILOT_CMD",
         };
 
         if let Ok(cmd) = std::env::var(env_var) {
@@ -135,6 +142,10 @@ impl Session {
             SessionSource::OpenCode => (
                 "opencode".to_string(),
                 vec!["--session".to_string(), self.id.clone()],
+            ),
+            SessionSource::CopilotCli => (
+                "copilot".to_string(),
+                vec![format!("--resume={}", self.id)],
             ),
         }
     }
