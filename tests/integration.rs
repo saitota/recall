@@ -685,6 +685,7 @@ fn test_cli_search_with_source_filter() {
 
     let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     let results = json["results"].as_array().unwrap();
+    assert!(!results.is_empty(), "Should find at least one Claude result");
 
     // All results should be Claude
     for result in results {
@@ -706,6 +707,7 @@ fn test_cli_search_with_copilot_source_filter() {
 
     let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     let results = json["results"].as_array().unwrap();
+    assert!(!results.is_empty(), "Should find at least one Copilot result");
 
     // All results should be Copilot
     for result in results {
@@ -727,6 +729,7 @@ fn test_cli_search_with_cursor_source_filter() {
 
     let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     let results = json["results"].as_array().unwrap();
+    assert!(!results.is_empty(), "Should find at least one Cursor result");
 
     // All results should be Cursor
     for result in results {

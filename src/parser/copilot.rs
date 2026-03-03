@@ -73,7 +73,12 @@ impl SessionParser for CopilotParser {
                             .map(|s| s.to_string());
                     }
                 }
-                "user.message" => {
+                "user.message" | "assistant.message" => {
+                    let role = if entry.entry_type == "user.message" {
+                        Role::User
+                    } else {
+                        Role::Assistant
+                    };
                     if let Some(content) = entry.data["content"].as_str() {
                         if !content.is_empty() {
                             let ts = timestamp.unwrap_or_else(Utc::now);
@@ -81,22 +86,7 @@ impl SessionParser for CopilotParser {
                                 latest_timestamp = Some(ts);
                             }
                             messages.push(Message {
-                                role: Role::User,
-                                content: content.to_string(),
-                                timestamp: ts,
-                            });
-                        }
-                    }
-                }
-                "assistant.message" => {
-                    if let Some(content) = entry.data["content"].as_str() {
-                        if !content.is_empty() {
-                            let ts = timestamp.unwrap_or_else(Utc::now);
-                            if latest_timestamp.is_none_or(|prev| ts > prev) {
-                                latest_timestamp = Some(ts);
-                            }
-                            messages.push(Message {
-                                role: Role::Assistant,
+                                role,
                                 content: content.to_string(),
                                 timestamp: ts,
                             });

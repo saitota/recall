@@ -136,29 +136,19 @@ pub fn discover_session_files() -> Vec<std::path::PathBuf> {
             }
         }
 
-        // Cursor: ~/.cursor/chats/{id}/store.db or ~/.cursor/chats/{workspace}/{session}/store.db
+        // Cursor: ~/.cursor/chats/**/store.db
         for cursor_base in &[
             home.join(".cursor/chats"),
             home.join(".config/cursor/chats"),
         ] {
             if cursor_base.exists() {
-                if let Ok(entries) = std::fs::read_dir(cursor_base) {
-                    for entry in entries.flatten() {
-                        // Direct: {base}/{id}/store.db
-                        let store = entry.path().join("store.db");
-                        if store.exists() {
-                            files.push(store);
-                        } else if entry.path().is_dir() {
-                            // Nested: {base}/{workspace}/{session}/store.db
-                            if let Ok(sub_entries) = std::fs::read_dir(entry.path()) {
-                                for sub in sub_entries.flatten() {
-                                    let sub_store = sub.path().join("store.db");
-                                    if sub_store.exists() {
-                                        files.push(sub_store);
-                                    }
-                                }
-                            }
-                        }
+                for entry in walkdir::WalkDir::new(cursor_base)
+                    .into_iter()
+                    .flatten()
+                {
+                    let path = entry.path();
+                    if path.file_name().and_then(|n| n.to_str()) == Some("store.db") {
+                        files.push(path.to_path_buf());
                     }
                 }
             }
