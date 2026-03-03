@@ -1,6 +1,5 @@
 use insta::assert_snapshot;
 use ratatui::{backend::TestBackend, Terminal};
-use rusqlite;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tempfile::TempDir;
