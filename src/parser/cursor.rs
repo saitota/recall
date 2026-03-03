@@ -81,18 +81,20 @@ impl SessionParser for CursorParser {
                 .unwrap_or_default(),
         };
 
+        // Prefer the latest message timestamp for consistency with other parsers.
+        // OpenAI-format messages only have createdAt as fallback (no per-message timestamps).
+        let latest_message_ts = messages.iter().map(|m| m.timestamp).max();
+        let timestamp = latest_message_ts
+            .or(created_at)
+            .unwrap_or_else(Utc::now);
+
         Ok(Session {
             id: session_id,
             source: SessionSource::CursorCli,
             file_path: path.to_path_buf(),
-            cwd: cwd.unwrap_or_default(),
+            cwd: cwd.unwrap_or_else(|| ".".to_string()),
             git_branch: None,
-            timestamp: created_at.unwrap_or_else(|| {
-                messages
-                    .last()
-                    .map(|m| m.timestamp)
-                    .unwrap_or_else(Utc::now)
-            }),
+            timestamp,
             messages: join_consecutive_messages(messages),
         })
     }
