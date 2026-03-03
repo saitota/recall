@@ -8,7 +8,7 @@ mod cli;
 
 #[derive(Parser)]
 #[command(name = "recall")]
-#[command(version, about = "Search and resume Claude Code, Codex CLI, Factory, and Copilot conversations")]
+#[command(version, about = "Search and resume Claude Code, Codex CLI, Factory, OpenCode, and Copilot conversations")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -30,7 +30,7 @@ enum Command {
         #[arg(required = true)]
         query: Vec<String>,
 
-        /// Filter by source (claude, codex, factory, opencode)
+        /// Filter by source (claude, codex, factory, opencode, copilot)
         #[arg(long, short)]
         source: Option<String>,
 
@@ -65,7 +65,7 @@ enum Command {
         #[arg(long, short, default_value = "20")]
         limit: usize,
 
-        /// Filter by source (claude, codex, factory, opencode)
+        /// Filter by source (claude, codex, factory, opencode, copilot)
         #[arg(long, short)]
         source: Option<String>,
 
@@ -143,7 +143,7 @@ fn main() -> Result<()> {
 fn parse_source(source: &Option<String>) -> Result<Option<SessionSource>> {
     match source {
         Some(s) => SessionSource::parse(s)
-            .ok_or_else(|| anyhow::anyhow!("Invalid source '{}'. Valid: claude, codex, factory, opencode", s))
+            .ok_or_else(|| anyhow::anyhow!("Invalid source '{}'. Valid: claude, codex, factory, opencode, copilot", s))
             .map(Some),
         None => Ok(None),
     }
