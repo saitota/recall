@@ -42,7 +42,7 @@ impl SessionParser for ClaudeParser {
     fn can_parse(path: &Path) -> bool {
         // Claude Code sessions are in ~/.claude/projects/
         path.to_str()
-            .map(|s| s.contains(".claude/projects"))
+            .map(|s| s.contains(".claude/projects") || s.contains(".claude\\projects"))
             .unwrap_or(false)
     }
 

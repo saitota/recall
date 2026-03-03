@@ -47,7 +47,7 @@ impl SessionParser for CodexParser {
     fn can_parse(path: &Path) -> bool {
         // Codex sessions are in ~/.codex/sessions/ and start with "rollout-"
         path.to_str()
-            .map(|s| s.contains(".codex/sessions"))
+            .map(|s| s.contains(".codex/sessions") || s.contains(".codex\\sessions"))
             .unwrap_or(false)
     }
 
