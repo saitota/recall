@@ -75,8 +75,7 @@ impl SessionParser for CursorParser {
         let fallback_ts = created_at.unwrap_or_else(Utc::now);
         let messages = match read_openai_messages(&conn, fallback_ts) {
             Ok(msgs) if !msgs.is_empty() => msgs,
-            _ => read_blobs_key_value(&conn)
-                .or_else(|_| read_blobs_id_data(&conn))
+            _ => read_blobs(&conn)
                 .map(|bubbles| bubbles_to_messages(&bubbles))
                 .unwrap_or_default(),
         };
@@ -151,8 +150,6 @@ fn extract_openai_content(content: &serde_json::Value) -> String {
             .filter_map(|part| {
                 let t = part.get("type")?.as_str()?;
                 if t == "text" {
-                    part.get("text")?.as_str().map(|s| s.to_string())
-                } else if t == "reasoning" {
                     part.get("text")?.as_str().map(|s| s.to_string())
                 } else {
                     None
@@ -244,31 +241,15 @@ fn extract_bubbles(val: &serde_json::Value) -> Vec<CursorBubble> {
     Vec::new()
 }
 
-fn read_blobs_key_value(conn: &Connection) -> Result<Vec<CursorBubble>> {
-    let mut stmt = conn.prepare("SELECT key, value FROM blobs WHERE value IS NOT NULL ORDER BY rowid")?;
-    let rows = stmt.query_map([], |row| {
-        let value: Vec<u8> = row.get(1)?;
-        Ok(value)
-    })?;
+fn read_blobs(conn: &Connection) -> Result<Vec<CursorBubble>> {
+    let mut stmt = conn
+        .prepare("SELECT value FROM blobs WHERE value IS NOT NULL ORDER BY rowid")
+        .or_else(|_| conn.prepare("SELECT data FROM blobs WHERE data IS NOT NULL ORDER BY rowid"))?;
+    let rows = stmt.query_map([], |row| row.get::<_, Vec<u8>>(0))?;
 
     let mut bubbles = Vec::new();
-    for value in rows.flatten() {
-        bubbles.extend(decode_blob_value(&value));
-    }
-    Ok(bubbles)
-}
-
-fn read_blobs_id_data(conn: &Connection) -> Result<Vec<CursorBubble>> {
-    let mut stmt =
-        conn.prepare("SELECT id, data FROM blobs WHERE data IS NOT NULL ORDER BY rowid")?;
-    let rows = stmt.query_map([], |row| {
-        let data: Vec<u8> = row.get(1)?;
-        Ok(data)
-    })?;
-
-    let mut bubbles = Vec::new();
-    for data in rows.flatten() {
-        bubbles.extend(decode_blob_value(&data));
+    for raw in rows.flatten() {
+        bubbles.extend(decode_blob_value(&raw));
     }
     Ok(bubbles)
 }
