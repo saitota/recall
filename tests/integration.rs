@@ -40,101 +40,30 @@ fn setup_test_env() -> TempDir {
     let copilot_dst = temp_path.join(".copilot");
     copy_dir_recursive(&copilot_src, &copilot_dst);
 
-    // Generate Cursor SQLite fixture programmatically (binary, not checked into git)
+    // Create Cursor Agent CLI JSONL fixtures
     create_cursor_fixture(temp_path);
 
     temp_dir
 }
 
-/// Create Cursor chat SQLite fixtures in the temp directory
+/// Create Cursor Agent CLI transcript fixtures in the temp directory
 fn create_cursor_fixture(temp_path: &std::path::Path) {
-    // Legacy bubble format (direct: {base}/{id}/store.db)
-    let chat_dir = temp_path.join(".cursor/chats/test-cursor-001");
-    std::fs::create_dir_all(&chat_dir).unwrap();
-    let db_path = chat_dir.join("store.db");
+    let transcripts_dir = temp_path.join(".cursor/projects/test-project/agent-transcripts");
+    std::fs::create_dir_all(&transcripts_dir).unwrap();
 
-    let conn = rusqlite::Connection::open(&db_path).unwrap();
-    conn.execute_batch(
-        "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
-         CREATE TABLE blobs (key TEXT PRIMARY KEY, value BLOB);",
-    )
-    .unwrap();
+    // First session
+    let session1 = transcripts_dir.join("test-cursor-001.jsonl");
+    let content1 = r#"{"role":"user","message":{"content":[{"type":"text","text":"hello cursor"}]}}
+{"role":"assistant","message":{"content":[{"type":"text","text":"Hi! How can I help with cursor?"}]}}
+"#;
+    std::fs::write(&session1, content1).unwrap();
 
-    let meta_json = serde_json::json!({
-        "createdAt": 1705300000000_i64,
-        "cwd": "/test/project"
-    });
-    conn.execute(
-        "INSERT INTO meta (key, value) VALUES ('0', ?1)",
-        rusqlite::params![meta_json.to_string()],
-    )
-    .unwrap();
-
-    let bubble1 = serde_json::json!({
-        "bubbleId": "b1",
-        "type": 1,
-        "text": "hello cursor",
-        "timestamp": 1705300001000_i64
-    });
-    let bubble2 = serde_json::json!({
-        "bubbleId": "b2",
-        "type": 2,
-        "text": "Hi! How can I help with cursor?",
-        "timestamp": 1705300002000_i64
-    });
-
-    conn.execute(
-        "INSERT INTO blobs (key, value) VALUES ('b1', ?1)",
-        rusqlite::params![bubble1.to_string().as_bytes()],
-    )
-    .unwrap();
-    conn.execute(
-        "INSERT INTO blobs (key, value) VALUES ('b2', ?1)",
-        rusqlite::params![bubble2.to_string().as_bytes()],
-    )
-    .unwrap();
-    drop(conn);
-
-    // OpenAI format with nested structure ({base}/{workspace}/{session}/store.db)
-    let nested_dir = temp_path.join(".cursor/chats/workspace-hash-001/test-cursor-openai");
-    std::fs::create_dir_all(&nested_dir).unwrap();
-    let nested_db = nested_dir.join("store.db");
-
-    let conn2 = rusqlite::Connection::open(&nested_db).unwrap();
-    conn2
-        .execute_batch(
-            "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
-             CREATE TABLE blobs (id TEXT PRIMARY KEY, data BLOB);",
-        )
-        .unwrap();
-
-    // Hex-encoded meta (like real Cursor Agent CLI)
-    let meta2 = serde_json::json!({
-        "agentId": "test-cursor-openai",
-        "createdAt": 1705400000000_i64,
-    });
-    let hex_meta = hex::encode(meta2.to_string());
-    conn2
-        .execute(
-            "INSERT INTO meta (key, value) VALUES ('0', ?1)",
-            rusqlite::params![hex_meta],
-        )
-        .unwrap();
-
-    let msg1 = serde_json::json!({"role": "user", "content": [{"type": "text", "text": "hello openai cursor"}]});
-    let msg2 = serde_json::json!({"role": "assistant", "content": [{"type": "text", "text": "OpenAI format response"}]});
-    conn2
-        .execute(
-            "INSERT INTO blobs (id, data) VALUES ('u1', ?1)",
-            rusqlite::params![msg1.to_string().as_bytes()],
-        )
-        .unwrap();
-    conn2
-        .execute(
-            "INSERT INTO blobs (id, data) VALUES ('a1', ?1)",
-            rusqlite::params![msg2.to_string().as_bytes()],
-        )
-        .unwrap();
+    // Second session
+    let session2 = transcripts_dir.join("test-cursor-openai.jsonl");
+    let content2 = r#"{"role":"user","message":{"content":[{"type":"text","text":"hello openai cursor"}]}}
+{"role":"assistant","message":{"content":[{"type":"text","text":"OpenAI format response"}]}}
+"#;
+    std::fs::write(&session2, content2).unwrap();
 }
 
 /// Recursively copy a directory
@@ -272,21 +201,20 @@ fn test_discovers_cursor_sessions() {
 
     let cursor_files: Vec<_> = files
         .iter()
-        .filter(|f| f.to_string_lossy().contains(".cursor/chats"))
+        .filter(|f| f.to_string_lossy().contains(".cursor/projects"))
         .collect();
-    // Should find both direct (test-cursor-001) and nested (workspace-hash-001/test-cursor-openai)
     assert!(
         cursor_files.len() >= 2,
-        "Should find at least 2 cursor sessions (direct + nested), found {}",
+        "Should find at least 2 cursor sessions, found {}",
         cursor_files.len()
     );
     assert!(
         cursor_files.iter().any(|f| f.to_string_lossy().contains("test-cursor-001")),
-        "Should find direct cursor session"
+        "Should find cursor session 001"
     );
     assert!(
         cursor_files.iter().any(|f| f.to_string_lossy().contains("test-cursor-openai")),
-        "Should find nested cursor session"
+        "Should find cursor session openai"
     );
 }
 
@@ -801,7 +729,7 @@ fn test_cli_read_cursor_session() {
 }
 
 #[test]
-fn test_cli_search_finds_openai_cursor_content() {
+fn test_cli_search_finds_second_cursor_content() {
     let _lock = lock_test();
     let temp_dir = setup_test_env();
 
@@ -817,12 +745,12 @@ fn test_cli_search_finds_openai_cursor_content() {
 
     assert!(
         results.iter().any(|r| r["session_id"] == "test-cursor-openai"),
-        "Should find nested OpenAI-format Cursor session"
+        "Should find second Cursor session"
     );
 }
 
 #[test]
-fn test_cli_read_openai_cursor_session() {
+fn test_cli_read_second_cursor_session() {
     let _lock = lock_test();
     let temp_dir = setup_test_env();
 
@@ -831,7 +759,7 @@ fn test_cli_read_openai_cursor_session() {
         temp_dir.path(),
     );
 
-    assert!(success, "CLI read should succeed for OpenAI-format cursor session");
+    assert!(success, "CLI read should succeed for second cursor session");
 
     let json: serde_json::Value = serde_json::from_str(&stdout)
         .expect("Output should be valid JSON");

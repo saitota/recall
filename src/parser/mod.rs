@@ -33,6 +33,26 @@ pub fn join_consecutive_messages(messages: Vec<Message>) -> Vec<Message> {
     })
 }
 
+/// Extract text content from a message content field.
+/// Handles both plain strings and arrays of {type, text} content blocks.
+pub fn extract_text_content(content: &serde_json::Value) -> String {
+    match content {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Array(arr) => arr
+            .iter()
+            .filter_map(|part| {
+                if part.get("type")?.as_str()? == "text" {
+                    part.get("text")?.as_str().map(|s| s.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+        _ => String::new(),
+    }
+}
+
 /// Trait for parsing session files
 pub trait SessionParser {
     /// Parse a session file into a Session
@@ -136,19 +156,17 @@ pub fn discover_session_files() -> Vec<std::path::PathBuf> {
             }
         }
 
-        // Cursor: ~/.cursor/chats/**/store.db
-        for cursor_base in &[
-            home.join(".cursor/chats"),
-            home.join(".config/cursor/chats"),
-        ] {
-            if cursor_base.exists() {
-                for entry in walkdir::WalkDir::new(cursor_base)
-                    .into_iter()
-                    .flatten()
-                {
-                    let path = entry.path();
-                    if path.file_name().and_then(|n| n.to_str()) == Some("store.db") {
-                        files.push(path.to_path_buf());
+        // Cursor Agent CLI: ~/.cursor/projects/*/agent-transcripts/*.jsonl
+        let cursor_projects = home.join(".cursor/projects");
+        if let Ok(projects) = std::fs::read_dir(&cursor_projects) {
+            for project in projects.flatten() {
+                let transcripts = project.path().join("agent-transcripts");
+                if let Ok(entries) = std::fs::read_dir(&transcripts) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.extension().map(|e| e == "jsonl").unwrap_or(false) {
+                            files.push(path);
+                        }
                     }
                 }
             }
@@ -171,13 +189,7 @@ pub fn parse_session_file(path: &Path) -> Result<Session> {
     } else if CopilotParser::can_parse(path) {
         CopilotParser::parse_file(path)
     } else if CursorParser::can_parse(path) {
-        let mut session = CursorParser::parse_file(path)?;
-        if session.cwd == "." {
-            if let Some(cwd) = cursor::resolve_cursor_cwd(&session.id) {
-                session.cwd = cwd;
-            }
-        }
-        Ok(session)
+        CursorParser::parse_file(path)
     } else {
         anyhow::bail!("Unknown session file format: {:?}", path)
     }

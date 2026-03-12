@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
-use super::{join_consecutive_messages, SessionParser};
+use super::{extract_text_content, join_consecutive_messages, SessionParser};
 
 #[derive(Debug, Deserialize)]
 struct ClaudeLine {
@@ -114,7 +114,7 @@ impl SessionParser for ClaudeParser {
                     _ => continue,
                 };
 
-                let content = extract_content(&msg.content);
+                let content = extract_text_content(&msg.content);
                 if content.is_empty() {
                     continue;
                 }
@@ -155,42 +155,16 @@ impl SessionParser for ClaudeParser {
     }
 }
 
-/// Extract text content from Claude's message content field.
-/// - User messages: content is a plain string
-/// - Assistant messages: content is an array of {type, text} objects
-fn extract_content(content: &serde_json::Value) -> String {
-    match content {
-        // Direct string (user messages)
-        serde_json::Value::String(s) => s.clone(),
-
-        // Array of content blocks (assistant messages)
-        serde_json::Value::Array(arr) => {
-            let mut texts = Vec::new();
-            for item in arr {
-                if let Some(obj) = item.as_object() {
-                    // Only extract "text" type blocks, skip tool_use, thinking, etc.
-                    if obj.get("type").and_then(|v| v.as_str()) == Some("text") {
-                        if let Some(text) = obj.get("text").and_then(|v| v.as_str()) {
-                            texts.push(text.to_string());
-                        }
-                    }
-                }
-            }
-            texts.join("\n")
-        }
-
-        _ => String::new(),
-    }
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::extract_text_content;
 
     #[test]
     fn test_extract_content_string() {
         let content = serde_json::json!("Hello, world!");
-        assert_eq!(extract_content(&content), "Hello, world!");
+        assert_eq!(extract_text_content(&content), "Hello, world!");
     }
 
     #[test]
@@ -200,7 +174,6 @@ mod tests {
             {"type": "tool_use", "name": "Read"},
             {"type": "text", "text": "World"}
         ]);
-        assert_eq!(extract_content(&content), "Hello\nWorld");
+        assert_eq!(extract_text_content(&content), "Hello\nWorld");
     }
-
 }
