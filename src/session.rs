@@ -156,7 +156,7 @@ impl Session {
             ),
             SessionSource::CursorCli => (
                 "cursor-agent".to_string(),
-                vec![format!("--resume={}", self.id)],
+                vec!["--resume".to_string(), self.id.clone()],
             ),
         }
     }
@@ -297,7 +297,7 @@ mod tests {
         let session = make_session(SessionSource::CursorCli, "def-456");
         let (cmd, args) = session.resume_command();
         assert_eq!(cmd, "cursor-agent");
-        assert_eq!(args, vec!["--resume=def-456"]);
+        assert_eq!(args, vec!["--resume", "def-456"]);
     }
 
     #[test]

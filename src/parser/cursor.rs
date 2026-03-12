@@ -3,7 +3,7 @@ use anyhow::{Context, Result};
 use chrono::{TimeZone, Utc};
 use rusqlite::Connection;
 use serde::Deserialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::{join_consecutive_messages, SessionParser};
 
@@ -254,6 +254,56 @@ fn read_blobs(conn: &Connection) -> Result<Vec<CursorBubble>> {
     Ok(bubbles)
 }
 
+/// Resolve cwd for a Cursor session by looking up its UUID in ~/.cursor/projects/
+pub fn resolve_cursor_cwd(uuid: &str) -> Option<String> {
+    let home = dirs::home_dir()?;
+    let projects_dir = home.join(".cursor/projects");
+
+    for entry in std::fs::read_dir(&projects_dir).ok()?.flatten() {
+        let transcript = entry
+            .path()
+            .join("agent-transcripts")
+            .join(format!("{}.jsonl", uuid));
+        if transcript.exists() {
+            return decode_workspace_path(entry.file_name().to_str()?);
+        }
+    }
+    None
+}
+
+/// Decode a Cursor workspace directory name to a filesystem path.
+/// Cursor encodes `/`, `.` as `-` in workspace names.
+/// Uses greedy DFS with Path::exists() validation to resolve ambiguity.
+fn decode_workspace_path(name: &str) -> Option<String> {
+    let parts: Vec<&str> = name.split('-').collect();
+    if parts.is_empty() {
+        return None;
+    }
+    let start = PathBuf::from("/").join(parts[0]);
+    let mut best: Option<PathBuf> = None;
+    dfs_decode(&parts, 1, &start, &mut best);
+    best.map(|p| p.to_string_lossy().into_owned())
+}
+
+fn dfs_decode(parts: &[&str], idx: usize, current: &Path, best: &mut Option<PathBuf>) {
+    if current.exists() {
+        *best = Some(current.to_path_buf());
+    }
+    if idx >= parts.len() {
+        return;
+    }
+
+    // Try '/' separator (new directory component)
+    let with_slash = current.join(parts[idx]);
+    dfs_decode(parts, idx + 1, &with_slash, best);
+
+    // Try '.' separator (dot-join with current last component)
+    if let (Some(parent), Some(last)) = (current.parent(), current.file_name()) {
+        let dotted = parent.join(format!("{}.{}", last.to_string_lossy(), parts[idx]));
+        dfs_decode(parts, idx + 1, &dotted, best);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -386,6 +436,52 @@ mod tests {
         assert_eq!(session.messages.len(), 1);
         assert_eq!(session.messages[0].role, Role::User);
         assert_eq!(session.messages[0].content, "base64 message");
+    }
+
+    #[test]
+    fn test_decode_workspace_path() {
+        let dir = tempfile::TempDir::new().unwrap();
+        // Create /a/b.c/d structure
+        let nested = dir.path().join("a/b.c/d");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        // Encoded as "a-b-c-d" (both / and . become -)
+        let dir_str = dir.path().to_str().unwrap();
+        // We need to test with real filesystem paths, so construct the encoded name
+        // from the tempdir path components
+        let parts: Vec<&str> = dir_str.trim_start_matches('/').split('/').collect();
+        // Build encoded name: join all path components + "a-b-c-d" with '-'
+        let mut encoded_parts = parts.clone();
+        encoded_parts.extend_from_slice(&["a", "b", "c", "d"]);
+        let encoded = encoded_parts.join("-");
+
+        let result = decode_workspace_path(&encoded);
+        assert_eq!(result, Some(nested.to_string_lossy().into_owned()));
+    }
+
+    #[test]
+    fn test_decode_workspace_path_simple() {
+        // Test with paths that actually exist on the system
+        // /tmp always exists
+        let dir = tempfile::TempDir::new().unwrap();
+        let project = dir.path().join("myproject");
+        std::fs::create_dir_all(&project).unwrap();
+
+        let dir_str = dir.path().to_str().unwrap();
+        let parts: Vec<&str> = dir_str.trim_start_matches('/').split('/').collect();
+        let mut encoded_parts = parts;
+        encoded_parts.push("myproject");
+        let encoded = encoded_parts.join("-");
+
+        let result = decode_workspace_path(&encoded);
+        assert_eq!(result, Some(project.to_string_lossy().into_owned()));
+    }
+
+    #[test]
+    fn test_resolve_cursor_cwd_not_found() {
+        // UUID that doesn't exist should return None
+        let result = resolve_cursor_cwd("nonexistent-uuid-12345");
+        assert!(result.is_none());
     }
 
     #[test]

@@ -171,7 +171,13 @@ pub fn parse_session_file(path: &Path) -> Result<Session> {
     } else if CopilotParser::can_parse(path) {
         CopilotParser::parse_file(path)
     } else if CursorParser::can_parse(path) {
-        CursorParser::parse_file(path)
+        let mut session = CursorParser::parse_file(path)?;
+        if session.cwd == "." {
+            if let Some(cwd) = cursor::resolve_cursor_cwd(&session.id) {
+                session.cwd = cwd;
+            }
+        }
+        Ok(session)
     } else {
         anyhow::bail!("Unknown session file format: {:?}", path)
     }
