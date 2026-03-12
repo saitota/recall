@@ -35,7 +35,106 @@ fn setup_test_env() -> TempDir {
     let codex_dst = temp_path.join(".codex");
     copy_dir_recursive(&codex_src, &codex_dst);
 
+    // Copy .copilot directory
+    let copilot_src = fixtures.join(".copilot");
+    let copilot_dst = temp_path.join(".copilot");
+    copy_dir_recursive(&copilot_src, &copilot_dst);
+
+    // Generate Cursor SQLite fixture programmatically (binary, not checked into git)
+    create_cursor_fixture(temp_path);
+
     temp_dir
+}
+
+/// Create Cursor chat SQLite fixtures in the temp directory
+fn create_cursor_fixture(temp_path: &std::path::Path) {
+    // Legacy bubble format (direct: {base}/{id}/store.db)
+    let chat_dir = temp_path.join(".cursor/chats/test-cursor-001");
+    std::fs::create_dir_all(&chat_dir).unwrap();
+    let db_path = chat_dir.join("store.db");
+
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
+         CREATE TABLE blobs (key TEXT PRIMARY KEY, value BLOB);",
+    )
+    .unwrap();
+
+    let meta_json = serde_json::json!({
+        "createdAt": 1705300000000_i64,
+        "cwd": "/test/project"
+    });
+    conn.execute(
+        "INSERT INTO meta (key, value) VALUES ('0', ?1)",
+        rusqlite::params![meta_json.to_string()],
+    )
+    .unwrap();
+
+    let bubble1 = serde_json::json!({
+        "bubbleId": "b1",
+        "type": 1,
+        "text": "hello cursor",
+        "timestamp": 1705300001000_i64
+    });
+    let bubble2 = serde_json::json!({
+        "bubbleId": "b2",
+        "type": 2,
+        "text": "Hi! How can I help with cursor?",
+        "timestamp": 1705300002000_i64
+    });
+
+    conn.execute(
+        "INSERT INTO blobs (key, value) VALUES ('b1', ?1)",
+        rusqlite::params![bubble1.to_string().as_bytes()],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO blobs (key, value) VALUES ('b2', ?1)",
+        rusqlite::params![bubble2.to_string().as_bytes()],
+    )
+    .unwrap();
+    drop(conn);
+
+    // OpenAI format with nested structure ({base}/{workspace}/{session}/store.db)
+    let nested_dir = temp_path.join(".cursor/chats/workspace-hash-001/test-cursor-openai");
+    std::fs::create_dir_all(&nested_dir).unwrap();
+    let nested_db = nested_dir.join("store.db");
+
+    let conn2 = rusqlite::Connection::open(&nested_db).unwrap();
+    conn2
+        .execute_batch(
+            "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
+             CREATE TABLE blobs (id TEXT PRIMARY KEY, data BLOB);",
+        )
+        .unwrap();
+
+    // Hex-encoded meta (like real Cursor Agent CLI)
+    let meta2 = serde_json::json!({
+        "agentId": "test-cursor-openai",
+        "createdAt": 1705400000000_i64,
+    });
+    let hex_meta = hex::encode(meta2.to_string());
+    conn2
+        .execute(
+            "INSERT INTO meta (key, value) VALUES ('0', ?1)",
+            rusqlite::params![hex_meta],
+        )
+        .unwrap();
+
+    let msg1 = serde_json::json!({"role": "user", "content": [{"type": "text", "text": "hello openai cursor"}]});
+    let msg2 = serde_json::json!({"role": "assistant", "content": [{"type": "text", "text": "OpenAI format response"}]});
+    conn2
+        .execute(
+            "INSERT INTO blobs (id, data) VALUES ('u1', ?1)",
+            rusqlite::params![msg1.to_string().as_bytes()],
+        )
+        .unwrap();
+    conn2
+        .execute(
+            "INSERT INTO blobs (id, data) VALUES ('a1', ?1)",
+            rusqlite::params![msg2.to_string().as_bytes()],
+        )
+        .unwrap();
 }
 
 /// Recursively copy a directory
@@ -142,6 +241,52 @@ fn test_discovers_codex_sessions() {
     assert!(
         files.iter().any(|f| f.to_string_lossy().contains(".codex/sessions")),
         "Should find files in .codex/sessions"
+    );
+}
+
+#[test]
+fn test_discovers_copilot_sessions() {
+    let _lock = lock_test();
+    let temp_dir = setup_test_env();
+    std::env::set_var("RECALL_HOME_OVERRIDE", temp_dir.path());
+
+    let files = recall::parser::discover_session_files();
+
+    std::env::remove_var("RECALL_HOME_OVERRIDE");
+
+    assert!(
+        files.iter().any(|f| f.to_string_lossy().contains(".copilot/session-state")),
+        "Should find files in .copilot/session-state"
+    );
+}
+
+#[test]
+fn test_discovers_cursor_sessions() {
+    let _lock = lock_test();
+    let temp_dir = setup_test_env();
+    std::env::set_var("RECALL_HOME_OVERRIDE", temp_dir.path());
+
+    let files = recall::parser::discover_session_files();
+
+    std::env::remove_var("RECALL_HOME_OVERRIDE");
+
+    let cursor_files: Vec<_> = files
+        .iter()
+        .filter(|f| f.to_string_lossy().contains(".cursor/chats"))
+        .collect();
+    // Should find both direct (test-cursor-001) and nested (workspace-hash-001/test-cursor-openai)
+    assert!(
+        cursor_files.len() >= 2,
+        "Should find at least 2 cursor sessions (direct + nested), found {}",
+        cursor_files.len()
+    );
+    assert!(
+        cursor_files.iter().any(|f| f.to_string_lossy().contains("test-cursor-001")),
+        "Should find direct cursor session"
+    );
+    assert!(
+        cursor_files.iter().any(|f| f.to_string_lossy().contains("test-cursor-openai")),
+        "Should find nested cursor session"
     );
 }
 
@@ -540,11 +685,164 @@ fn test_cli_search_with_source_filter() {
 
     let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     let results = json["results"].as_array().unwrap();
+    assert!(!results.is_empty(), "Should find at least one Claude result");
 
     // All results should be Claude
     for result in results {
         assert_eq!(result["source"], "claude");
     }
+}
+
+#[test]
+fn test_cli_search_with_copilot_source_filter() {
+    let _lock = lock_test();
+    let temp_dir = setup_test_env();
+
+    let (stdout, _stderr, success) = run_cli(
+        &["search", "hello", "--source", "copilot", "--limit", "10"],
+        temp_dir.path(),
+    );
+
+    assert!(success);
+
+    let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let results = json["results"].as_array().unwrap();
+    assert!(!results.is_empty(), "Should find at least one Copilot result");
+
+    // All results should be Copilot
+    for result in results {
+        assert_eq!(result["source"], "copilot");
+    }
+}
+
+#[test]
+fn test_cli_search_with_cursor_source_filter() {
+    let _lock = lock_test();
+    let temp_dir = setup_test_env();
+
+    let (stdout, _stderr, success) = run_cli(
+        &["search", "hello cursor", "--source", "cursor", "--limit", "10"],
+        temp_dir.path(),
+    );
+
+    assert!(success);
+
+    let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let results = json["results"].as_array().unwrap();
+    assert!(!results.is_empty(), "Should find at least one Cursor result");
+
+    // All results should be Cursor
+    for result in results {
+        assert_eq!(result["source"], "cursor");
+    }
+}
+
+#[test]
+fn test_cli_search_finds_cursor_content() {
+    let _lock = lock_test();
+    let temp_dir = setup_test_env();
+
+    let (stdout, _stderr, success) = run_cli(
+        &["search", "hello cursor", "--limit", "10"],
+        temp_dir.path(),
+    );
+
+    assert!(success);
+
+    let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let results = json["results"].as_array().unwrap();
+
+    assert!(
+        results.iter().any(|r| r["session_id"] == "test-cursor-001"),
+        "Should find Cursor fixture session"
+    );
+}
+
+#[test]
+fn test_cli_list_with_cursor_source_filter() {
+    let _lock = lock_test();
+    let temp_dir = setup_test_env();
+
+    let (stdout, _stderr, success) = run_cli(
+        &["list", "--source", "cursor", "--limit", "10"],
+        temp_dir.path(),
+    );
+
+    assert!(success);
+
+    let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let sessions = json["sessions"].as_array().unwrap();
+
+    // All sessions should be Cursor
+    for session in sessions {
+        assert_eq!(session["source"], "cursor");
+    }
+}
+
+#[test]
+fn test_cli_read_cursor_session() {
+    let _lock = lock_test();
+    let temp_dir = setup_test_env();
+
+    let (stdout, _stderr, success) = run_cli(
+        &["read", "test-cursor-001"],
+        temp_dir.path(),
+    );
+
+    assert!(success, "CLI read should succeed for cursor session");
+
+    let json: serde_json::Value = serde_json::from_str(&stdout)
+        .expect("Output should be valid JSON");
+
+    assert_eq!(json["session_id"], "test-cursor-001");
+    assert_eq!(json["source"], "cursor");
+    assert!(json["messages"].is_array());
+    assert!(!json["messages"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn test_cli_search_finds_openai_cursor_content() {
+    let _lock = lock_test();
+    let temp_dir = setup_test_env();
+
+    let (stdout, _stderr, success) = run_cli(
+        &["search", "openai cursor", "--source", "cursor", "--limit", "10"],
+        temp_dir.path(),
+    );
+
+    assert!(success);
+
+    let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let results = json["results"].as_array().unwrap();
+
+    assert!(
+        results.iter().any(|r| r["session_id"] == "test-cursor-openai"),
+        "Should find nested OpenAI-format Cursor session"
+    );
+}
+
+#[test]
+fn test_cli_read_openai_cursor_session() {
+    let _lock = lock_test();
+    let temp_dir = setup_test_env();
+
+    let (stdout, _stderr, success) = run_cli(
+        &["read", "test-cursor-openai"],
+        temp_dir.path(),
+    );
+
+    assert!(success, "CLI read should succeed for OpenAI-format cursor session");
+
+    let json: serde_json::Value = serde_json::from_str(&stdout)
+        .expect("Output should be valid JSON");
+
+    assert_eq!(json["session_id"], "test-cursor-openai");
+    assert_eq!(json["source"], "cursor");
+    let messages = json["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[0]["role"], "user");
+    assert!(messages[0]["content"].as_str().unwrap().contains("hello openai cursor"));
+    assert_eq!(messages[1]["role"], "assistant");
 }
 
 #[test]

@@ -210,6 +210,8 @@ fn render_results_list(frame: &mut Frame, app: &mut App, area: Rect) {
                 SessionSource::CodexCli => t.codex_source,
                 SessionSource::Factory => t.factory_source,
                 SessionSource::OpenCode => t.opencode_source,
+                SessionSource::CopilotCli => t.copilot_source,
+                SessionSource::CursorCli => t.cursor_source,
             };
 
             // Build header with colored source indicator
@@ -354,6 +356,8 @@ fn render_preview(frame: &mut Frame, app: &mut App, area: Rect) {
                 crate::session::SessionSource::CodexCli => (t.codex_source, t.codex_bubble_bg),
                 crate::session::SessionSource::Factory => (t.factory_source, t.factory_bubble_bg),
                 crate::session::SessionSource::OpenCode => (t.opencode_source, t.opencode_bubble_bg),
+                crate::session::SessionSource::CopilotCli => (t.copilot_source, t.copilot_bubble_bg),
+                crate::session::SessionSource::CursorCli => (t.cursor_source, t.cursor_bubble_bg),
             },
         };
 
@@ -374,6 +378,8 @@ fn render_preview(frame: &mut Frame, app: &mut App, area: Rect) {
                 crate::session::SessionSource::CodexCli => "Codex",
                 crate::session::SessionSource::Factory => "Droid",
                 crate::session::SessionSource::OpenCode => "OpenCode",
+                crate::session::SessionSource::CopilotCli => "Copilot",
+                crate::session::SessionSource::CursorCli => "Cursor",
             },
         };
 

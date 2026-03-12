@@ -12,6 +12,10 @@ pub enum SessionSource {
     Factory,
     #[serde(rename = "opencode")]
     OpenCode,
+    #[serde(rename = "copilot")]
+    CopilotCli,
+    #[serde(rename = "cursor")]
+    CursorCli,
 }
 
 impl SessionSource {
@@ -21,6 +25,8 @@ impl SessionSource {
             SessionSource::CodexCli => "codex",
             SessionSource::Factory => "factory",
             SessionSource::OpenCode => "opencode",
+            SessionSource::CopilotCli => "copilot",
+            SessionSource::CursorCli => "cursor",
         }
     }
 
@@ -30,6 +36,8 @@ impl SessionSource {
             "codex" => Some(SessionSource::CodexCli),
             "factory" => Some(SessionSource::Factory),
             "opencode" => Some(SessionSource::OpenCode),
+            "copilot" => Some(SessionSource::CopilotCli),
+            "cursor" => Some(SessionSource::CursorCli),
             _ => None,
         }
     }
@@ -40,6 +48,8 @@ impl SessionSource {
             SessionSource::CodexCli => "Codex",
             SessionSource::Factory => "Factory",
             SessionSource::OpenCode => "OpenCode",
+            SessionSource::CopilotCli => "Copilot",
+            SessionSource::CursorCli => "Cursor",
         }
     }
 
@@ -49,6 +59,8 @@ impl SessionSource {
             SessionSource::CodexCli => "■",
             SessionSource::Factory => "◆",
             SessionSource::OpenCode => "○",
+            SessionSource::CopilotCli => "▲",
+            SessionSource::CursorCli => "◇",
         }
     }
 }
@@ -105,6 +117,8 @@ impl Session {
             SessionSource::CodexCli => "RECALL_CODEX_CMD",
             SessionSource::Factory => "RECALL_FACTORY_CMD",
             SessionSource::OpenCode => "RECALL_OPENCODE_CMD",
+            SessionSource::CopilotCli => "RECALL_COPILOT_CMD",
+            SessionSource::CursorCli => "RECALL_CURSOR_CMD",
         };
 
         if let Ok(cmd) = std::env::var(env_var) {
@@ -135,6 +149,14 @@ impl Session {
             SessionSource::OpenCode => (
                 "opencode".to_string(),
                 vec!["--session".to_string(), self.id.clone()],
+            ),
+            SessionSource::CopilotCli => (
+                "copilot".to_string(),
+                vec![format!("--resume={}", self.id)],
+            ),
+            SessionSource::CursorCli => (
+                "cursor-agent".to_string(),
+                vec![format!("--resume={}", self.id)],
             ),
         }
     }
@@ -237,5 +259,55 @@ impl Session {
             timestamp: self.timestamp,
             resume_command: resume_str,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    /// Mutex to serialize tests that modify environment variables
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn make_session(source: SessionSource, id: &str) -> Session {
+        Session {
+            id: id.to_string(),
+            source,
+            file_path: std::path::PathBuf::from("/tmp/test"),
+            cwd: ".".to_string(),
+            git_branch: None,
+            timestamp: chrono::Utc::now(),
+            messages: vec![],
+        }
+    }
+
+    #[test]
+    fn test_resume_command_copilot() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let session = make_session(SessionSource::CopilotCli, "abc-123");
+        let (cmd, args) = session.resume_command();
+        assert_eq!(cmd, "copilot");
+        assert_eq!(args, vec!["--resume=abc-123"]);
+    }
+
+    #[test]
+    fn test_resume_command_cursor() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let session = make_session(SessionSource::CursorCli, "def-456");
+        let (cmd, args) = session.resume_command();
+        assert_eq!(cmd, "cursor-agent");
+        assert_eq!(args, vec!["--resume=def-456"]);
+    }
+
+    #[test]
+    fn test_resume_command_env_override() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let session = make_session(SessionSource::CopilotCli, "abc-123");
+        std::env::set_var("RECALL_COPILOT_CMD", "my-copilot --yolo {id}");
+        let (cmd, args) = session.resume_command();
+        std::env::remove_var("RECALL_COPILOT_CMD");
+        assert_eq!(cmd, "my-copilot");
+        assert_eq!(args, vec!["--yolo", "abc-123"]);
     }
 }

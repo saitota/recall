@@ -68,7 +68,10 @@ impl SessionParser for OpenCodeParser {
     fn can_parse(path: &Path) -> bool {
         // OpenCode sessions are in ~/.local/share/opencode/storage/session/
         path.to_str()
-            .map(|s| s.contains(".local/share/opencode/storage/session"))
+            .map(|s| {
+                s.contains(".local/share/opencode/storage/session")
+                    || s.contains(".local\\share\\opencode\\storage\\session")
+            })
             .unwrap_or(false)
     }
 

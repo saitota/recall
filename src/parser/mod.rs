@@ -1,10 +1,14 @@
 mod claude;
 mod codex;
+mod copilot;
+mod cursor;
 mod factory;
 mod opencode;
 
 pub use claude::ClaudeParser;
 pub use codex::CodexParser;
+pub use copilot::CopilotParser;
+pub use cursor::CursorParser;
 pub use factory::FactoryParser;
 pub use opencode::OpenCodeParser;
 
@@ -118,6 +122,37 @@ pub fn discover_session_files() -> Vec<std::path::PathBuf> {
                 }
             }
         }
+
+        // Copilot CLI: ~/.copilot/session-state/*/events.jsonl
+        let copilot_dir = home.join(".copilot/session-state");
+        if copilot_dir.exists() {
+            if let Ok(sessions) = std::fs::read_dir(&copilot_dir) {
+                for session in sessions.flatten() {
+                    let events = session.path().join("events.jsonl");
+                    if events.exists() {
+                        files.push(events);
+                    }
+                }
+            }
+        }
+
+        // Cursor: ~/.cursor/chats/**/store.db
+        for cursor_base in &[
+            home.join(".cursor/chats"),
+            home.join(".config/cursor/chats"),
+        ] {
+            if cursor_base.exists() {
+                for entry in walkdir::WalkDir::new(cursor_base)
+                    .into_iter()
+                    .flatten()
+                {
+                    let path = entry.path();
+                    if path.file_name().and_then(|n| n.to_str()) == Some("store.db") {
+                        files.push(path.to_path_buf());
+                    }
+                }
+            }
+        }
     }
 
     files
@@ -133,6 +168,10 @@ pub fn parse_session_file(path: &Path) -> Result<Session> {
         FactoryParser::parse_file(path)
     } else if OpenCodeParser::can_parse(path) {
         OpenCodeParser::parse_file(path)
+    } else if CopilotParser::can_parse(path) {
+        CopilotParser::parse_file(path)
+    } else if CursorParser::can_parse(path) {
+        CursorParser::parse_file(path)
     } else {
         anyhow::bail!("Unknown session file format: {:?}", path)
     }
