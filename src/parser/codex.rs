@@ -83,6 +83,10 @@ impl SessionParser for CodexParser {
             match entry.entry_type.as_str() {
                 "session_meta" => {
                     if let Some(payload) = &entry.payload {
+                        if is_subagent_session_meta(payload) {
+                            anyhow::bail!("Codex subagent sidechain session: {:?}", path);
+                        }
+
                         if let Ok(meta) = serde_json::from_value::<SessionMeta>(payload.clone()) {
                             // Only set if not already set (first session_meta wins)
                             if session_id.is_none() {
@@ -162,6 +166,14 @@ impl SessionParser for CodexParser {
             messages: join_consecutive_messages(messages),
         })
     }
+}
+
+fn is_subagent_session_meta(payload: &serde_json::Value) -> bool {
+    payload
+        .get("source")
+        .and_then(|source| source.get("subagent"))
+        .and_then(|subagent| subagent.get("thread_spawn"))
+        .is_some()
 }
 
 /// Extract text content from a Codex response item.
@@ -255,5 +267,37 @@ mod tests {
             extract_codex_content(&item),
             "<environment_context> what is this?"
         );
+    }
+
+    #[test]
+    fn test_is_subagent_session_meta() {
+        let payload = serde_json::json!({
+            "id": "child-session",
+            "source": {
+                "subagent": {
+                    "thread_spawn": {
+                        "parent_thread_id": "parent-session",
+                        "depth": 1
+                    }
+                }
+            }
+        });
+
+        assert!(is_subagent_session_meta(&payload));
+    }
+
+    #[test]
+    fn test_parse_subagent_session_returns_error() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("rollout-child.jsonl");
+
+        let content = r#"{"timestamp":"2026-03-25T07:35:38.039Z","type":"session_meta","payload":{"id":"child-session","forked_from_id":"parent-session","cwd":"/tmp/project","source":{"subagent":{"thread_spawn":{"parent_thread_id":"parent-session","depth":1}}}}}
+{"timestamp":"2026-03-25T07:35:38.040Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Child agent response"}]}}
+{"timestamp":"2026-03-25T07:35:38.041Z","type":"session_meta","payload":{"id":"parent-session","cwd":"/tmp/project","source":"cli"}}"#;
+
+        std::fs::write(&path, content).unwrap();
+
+        let err = CodexParser::parse_file(&path).unwrap_err();
+        assert!(err.to_string().contains("subagent sidechain"));
     }
 }

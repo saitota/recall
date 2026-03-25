@@ -174,6 +174,36 @@ fn test_discovers_codex_sessions() {
 }
 
 #[test]
+fn test_recent_sessions_skip_codex_subagent_sidechains() {
+    let _lock = lock_test();
+    let temp_dir = setup_test_env();
+    std::env::set_var("RECALL_HOME_OVERRIDE", temp_dir.path());
+
+    let mut app = recall::App::new(String::new()).unwrap();
+    wait_for_indexing(&mut app, 100);
+    app.toggle_scope();
+
+    std::env::remove_var("RECALL_HOME_OVERRIDE");
+
+    let codex_results: Vec<_> = app
+        .results
+        .iter()
+        .filter(|r| matches!(r.session.source, recall::SessionSource::CodexCli))
+        .collect();
+
+    assert!(
+        codex_results.iter().any(|r| r.session.id == "test-codex-456"),
+        "Should include the main Codex session"
+    );
+    assert!(
+        codex_results
+            .iter()
+            .all(|r| r.session.id != "test-codex-subagent"),
+        "Should skip Codex subagent sidechains"
+    );
+}
+
+#[test]
 fn test_discovers_copilot_sessions() {
     let _lock = lock_test();
     let temp_dir = setup_test_env();
