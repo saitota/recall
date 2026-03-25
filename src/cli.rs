@@ -233,18 +233,14 @@ pub fn run_list(
     let since_dt = since.as_ref().map(|s| parse_time(s)).transpose()?;
     let until_dt = until.as_ref().map(|s| parse_time(s)).transpose()?;
 
-    let results = index.recent(limit * 2)?; // Get more to filter
+    let results = index.recent_filtered(limit, source, cwd.as_deref())?;
 
     let output = ListOutput {
         sessions: results
             .iter()
-            // Filter by source
-            .filter(|r| source.is_none_or(|s| r.session.source == s))
             // Filter by time
             .filter(|r| since_dt.is_none_or(|t| r.session.timestamp >= t))
             .filter(|r| until_dt.is_none_or(|t| r.session.timestamp <= t))
-            // Filter by working directory
-            .filter(|r| cwd.as_ref().is_none_or(|c| r.session.cwd == *c))
             .take(limit)
             .map(|r| r.session.to_summary())
             .collect(),

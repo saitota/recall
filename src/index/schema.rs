@@ -309,15 +309,50 @@ impl SessionIndex {
 
     /// Get recent sessions sorted by timestamp (most recent first)
     pub fn recent(&self, limit: usize) -> Result<Vec<SearchResult>> {
+        self.recent_filtered(limit, None, None)
+    }
+
+    /// Get recent sessions sorted by timestamp (most recent first), with optional filters.
+    pub fn recent_filtered(
+        &self,
+        limit: usize,
+        source: Option<SessionSource>,
+        cwd: Option<&str>,
+    ) -> Result<Vec<SearchResult>> {
         use tantivy::collector::TopDocs;
         use tantivy::query::AllQuery;
 
         let searcher = self.reader.searcher();
 
+        let query: Box<dyn Query> = if source.is_none() && cwd.is_none() {
+            Box::new(AllQuery)
+        } else {
+            let mut clauses: Vec<(Occur, Box<dyn Query>)> = Vec::new();
+            clauses.push((Occur::Must, Box::new(AllQuery)));
+
+            if let Some(source) = source {
+                let term = tantivy::Term::from_field_text(self.source, source.as_str());
+                clauses.push((
+                    Occur::Must,
+                    Box::new(TermQuery::new(term, IndexRecordOption::Basic)),
+                ));
+            }
+
+            if let Some(cwd) = cwd {
+                let term = tantivy::Term::from_field_text(self.cwd, cwd);
+                clauses.push((
+                    Occur::Must,
+                    Box::new(TermQuery::new(term, IndexRecordOption::Basic)),
+                ));
+            }
+
+            Box::new(BooleanQuery::new(clauses))
+        };
+
         // Get all docs sorted by timestamp descending
         // Fetch many more docs since each session has multiple messages indexed
         let top_docs = searcher.search(
-            &AllQuery,
+            &*query,
             &TopDocs::with_limit(limit * 100).order_by_fast_field::<i64>("timestamp", tantivy::Order::Desc),
         )?;
 
@@ -435,4 +470,3 @@ impl SessionIndex {
         }
     }
 }
-

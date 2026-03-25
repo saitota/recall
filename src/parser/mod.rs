@@ -156,16 +156,19 @@ pub fn discover_session_files() -> Vec<std::path::PathBuf> {
             }
         }
 
-        // Cursor Agent CLI: ~/.cursor/projects/*/agent-transcripts/*.jsonl
+        // Cursor Agent CLI: ~/.cursor/projects/*/agent-transcripts/**/*.jsonl
         let cursor_projects = home.join(".cursor/projects");
         if let Ok(projects) = std::fs::read_dir(&cursor_projects) {
             for project in projects.flatten() {
                 let transcripts = project.path().join("agent-transcripts");
-                if let Ok(entries) = std::fs::read_dir(&transcripts) {
-                    for entry in entries.flatten() {
+                if transcripts.exists() {
+                    for entry in walkdir::WalkDir::new(&transcripts).into_iter().flatten() {
                         let path = entry.path();
+                        if path.components().any(|c| c.as_os_str() == "subagents") {
+                            continue;
+                        }
                         if path.extension().map(|e| e == "jsonl").unwrap_or(false) {
-                            files.push(path);
+                            files.push(path.to_path_buf());
                         }
                     }
                 }

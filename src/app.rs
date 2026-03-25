@@ -231,16 +231,19 @@ impl App {
         // Remember currently selected session to preserve selection
         let selected_session_id = self.results.get(self.selected).map(|r| r.session.id.clone());
 
-        let mut results = if self.query.is_empty() {
-            self.index.recent(50)?
+        let results = if self.query.is_empty() {
+            match &self.search_scope {
+                SearchScope::Everything => self.index.recent(50)?,
+                SearchScope::Folder(cwd) => self.index.recent_filtered(50, None, Some(cwd))?,
+            }
         } else {
-            self.index.search(&self.query, 50)?
-        };
-
-        // Filter by scope if searching within a folder
-        if let SearchScope::Folder(ref cwd) = self.search_scope {
-            results.retain(|r| r.session.cwd == *cwd);
+            let mut results = self.index.search(&self.query, 50)?;
+            if let SearchScope::Folder(ref cwd) = self.search_scope {
+                results.retain(|r| r.session.cwd == *cwd);
+            }
+            results
         }
+        ;
 
         self.results = results;
 

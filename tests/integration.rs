@@ -64,6 +64,23 @@ fn create_cursor_fixture(temp_path: &std::path::Path) {
 {"role":"assistant","message":{"content":[{"type":"text","text":"OpenAI format response"}]}}
 "#;
     std::fs::write(&session2, content2).unwrap();
+
+    // Nested main-session layout used by recent Cursor versions
+    let nested_dir = transcripts_dir.join("test-cursor-nested");
+    std::fs::create_dir_all(&nested_dir).unwrap();
+    let nested_session = nested_dir.join("test-cursor-nested.jsonl");
+    let nested_content = r#"{"role":"user","message":{"content":[{"type":"text","text":"hello nested cursor"}]}}
+{"role":"assistant","message":{"content":[{"type":"text","text":"Nested cursor response"}]}}
+"#;
+    std::fs::write(&nested_session, nested_content).unwrap();
+
+    // Subagent transcripts should not be indexed as top-level sessions
+    let subagent_dir = nested_dir.join("subagents");
+    std::fs::create_dir_all(&subagent_dir).unwrap();
+    let subagent_session = subagent_dir.join("test-cursor-subagent.jsonl");
+    let subagent_content = r#"{"role":"user","message":{"content":[{"type":"text","text":"subagent only"}]}}
+"#;
+    std::fs::write(&subagent_session, subagent_content).unwrap();
 }
 
 /// Recursively copy a directory
@@ -245,6 +262,16 @@ fn test_discovers_cursor_sessions() {
     assert!(
         cursor_files.iter().any(|f| f.to_string_lossy().contains("test-cursor-openai")),
         "Should find cursor session openai"
+    );
+    assert!(
+        cursor_files.iter().any(|f| f.to_string_lossy().contains("test-cursor-nested")),
+        "Should find nested cursor session"
+    );
+    assert!(
+        cursor_files
+            .iter()
+            .all(|f| !f.to_string_lossy().contains("test-cursor-subagent")),
+        "Should skip cursor subagent sessions"
     );
 }
 
